@@ -1,0 +1,112 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+      version = "3.69.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  # Configuration options
+subscription_id = "930b0843-6f87-476c-b4e5-4db055a4c1b5"
+client_id = "691f1a95-125d-4e56-b2b0-6fdf790e4c1f"
+client_secret = "5Ry8Q~KjPUUgLIqCluESFftnakBpOKxNRBRoSbcw"
+tenant_id = "2f59ff7c-1b6c-4d8c-97f5-e1e9103f2f15"
+features {}
+}
+
+locals {
+  resource_group_name = "RG1"
+  location = "Central India"
+  vm_count = 2
+  
+  
+}
+
+
+resource "azurerm_resource_group" "app_grp" {
+    name = "RG1"
+    location = "Central India"
+}
+
+
+resource "azurerm_storage_account" "storage_account" {
+    name = "storageshubham"
+    resource_group_name = "RG1" 
+    location = "Central India"
+    account_tier = "Standard"
+    account_replication_type = "LRS"
+    
+  
+}
+resource "azurerm_storage_container" "storage_container" {
+  name = "containershubham"
+  storage_account_name = "storageshubham"
+  container_access_type = "private"
+  depends_on = [ 
+    azurerm_storage_account.storage_account
+   ]
+  
+}
+resource "azurerm_storage_blob" "container_blob" {
+  name = "sample.txt"
+  storage_account_name = "storageshubham"
+  storage_container_name = "containershubham"
+  type = "Block"
+  source = "sample.txt"
+  depends_on = [ azurerm_storage_container.storage_container ]
+}
+resource "azurerm_virtual_network" "Vnet" {
+  name = "Vnetshubham"
+  location = local.location 
+  resource_group_name = local.resource_group_name
+  address_space = ["10.0.0.0/16"]
+}
+
+resource "azurerm_subnet" "subnet_name" {
+  name = "subnetshubham"
+  resource_group_name = local.resource_group_name
+  virtual_network_name = "Vnetshubham"
+  address_prefixes = ["10.0.0.0/24"]
+  
+  depends_on = [ azurerm_virtual_network.Vnet ]
+}
+
+resource "azurerm_network_interface" "network_interface" {
+  name = "VMshubham-nic-${count.index}"
+  count = local.vm_count
+  location = local.location
+  resource_group_name = local.resource_group_name
+  ip_configuration {
+    name = "IPconfiguration11-${count.index}"
+    subnet_id = azurerm_subnet.subnet_name.id
+    private_ip_address_allocation = "Dynamic"
+  }
+  depends_on = [ azurerm_virtual_network.Vnet ]
+  
+}
+resource "azurerm_windows_virtual_machine" "machine_name" {
+  name = "VMshubham-${count.index}"
+  count = local.vm_count
+  location = local.location
+  resource_group_name = local.resource_group_name
+  size = "Standard_B1s"
+  admin_username = "shubham"
+  admin_password = "shubham@123"
+  network_interface_ids = [ 
+    azurerm_network_interface.network_interface[count.index].id ]
+  os_disk {
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  source_image_reference {
+    publisher = "MicrosoftWindowsServer"
+    offer = "WindowsServer"
+    sku = "2016-Datacenter"
+    version = "latest"
+  }
+  
+depends_on = [ azurerm_network_interface.network_interface ]
+}
+  
